@@ -1,0 +1,261 @@
+---
+title: "SDA_Project2"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# loading all libraries need for this project 
+library(rgdal)
+library(ggplot2)
+library(raster)
+library(maptools)
+library(data.table) 
+library(plyr)
+library(dplyr)
+library(mapproj)
+library("spatstat", lib.loc="~/Library/R/3.5/library")
+set.seed(1234)
+```
+
+```{r}
+# loading all files on the OilGasLocationPA
+oil_gas <- readOGR(dsn="/Users/ainurbaikara/Desktop/OilGasLocationPA", layer = "OilGasLocationPA")
+summary(oil_gas)
+```
+
+# Regular Quadrat Method
+
+```{r}
+# removing the attributes of the points as we are more concerned with the points pattern generation 
+og<- as(oil_gas, "ppp")
+marks(og)  <- NULL
+# setting up the coundaries for our object
+bound=Window(og)
+bound
+```
+
+
+```{r}
+# plot the point layer to see whether the set boundaries are properly defined 
+plot(og, main=NULL, cols=rgb(0,0,0,.2), pch=20)
+```
+## Map of Regular Quadrat Count Method
+
+```{r}
+Q <- quadratcount(og, nx= 10, ny=10)
+plot(og, pch=20, cols="grey70", main=NULL)  # Plot points
+plot(Q, add=TRUE)  # Add quadrat grid
+```
+
+In order to get the frequency of the number of events I have unlisted the dataframe then get the new dataframe with the first column representing the number of events and second column representing the number of quadrats for each happening event
+
+```{r}
+cal_df <- as.data.frame(Q)
+table(unlist(cal_df$Freq))
+new_df <- as.data.frame(table(unlist(cal_df$Freq)))
+```
+
+
+## Table of the attributes
+
+I have calculated mu of the data. In order to calculate it I have to divide the number of observations to the number of quadrats. As I have got about 156K points divided by 100 quadrats give me value of 156. So, I have got 156. Based on that I did my further calculations. 
+
+```{r}
+new_df$Var1 <-as.numeric(as.character(new_df$Var1))
+new_df$mu <- with(new_df, Var1 - 156)
+new_df$mu_squared <-with(new_df, mu^2)
+new_df$x_to_musq <- with(new_df, mu_squared*Freq)
+setnames(new_df, old=c("Var1","Freq", "mu", "mu_squared", "x_to_musq"), 
+         new=c("K", "X", "K-mu", "(K-mu)^2", "X(K-mu)^2"))
+head(new_df)
+```
+IN ORDER TO NOT TAKE so much space with  the table of attributes I have put just the head of the data frame. If you run it in your machine without the head function it would give you full table of attributes
+
+
+# Random Quadrat Count Method 
+
+As I set 100 quadrats for Regular Method, I set the same number of quadrats for Random method. I run three itearation that will be shown below. For each iteration I have got the table. At the end I will summarize all three iterations with getting the mean of those three iterations. Ideally, the mean of iterations should be close to the VMR of Regular Count Method. 
+
+## 1st Iteration 
+```{r}
+#setting up the  boundaries 
+xmin=-215840
+xmax=256930
+ymin= 80496.98
+ymax=364306
+
+#totalnumber=100
+#creating an empty list 
+
+x<- list()
+# I had to draw the plot before calling the rectangular 
+plot(og)
+i <- 1
+#running the while loop to get 100 rectangles 
+while (i<101) {
+# this randomly generates the starting x and y coordinate for the rectangular; in this case I called runif function to get one values what are in the range of actual X coordinates of the oil_gas dataset
+  randomX<-runif(1,xmin,xmax)
+  randomY<-runif(1,ymin,ymax)
+# checks whather the points are within our boundaries   
+if(randomX+40000<xmax && randomY+28000 < ymax) { 
+  # I have got the size of the rectangular which is close to the quadrat I have got on the regular method.  
+  rect(randomX, randomY, randomX+40000, randomY+28000, border="red")
+  w<-owin(c(randomX,randomX+40000),c(randomY, randomY+28000))
+  #ok<-inside.owin(randomX, randomY, w)
+  ok<-inside.owin(og$x, og$y, w)
+  # length would allow me to count the number of points in each quadrat
+  m <-  length(which(ok, arr.ind = TRUE))
+   # then I am passing m to the x list and adding unique variables with the function paste0 
+  x[[paste0("val1", i)]] <- m
+    
+i=i+1
+}
+}
+```
+
+### Table of attributes for the first iteration
+
+```{r}
+df0 <- ldply (x, data.frame)
+setnames(df0, old=c(".id","X..i.."), 
+         new=c("id", "num"))
+w0 = table(df0$num)
+class(w0)
+t0 = as.data.frame(w0)
+t0$Var1 <-as.numeric(as.character(t0$Var1))
+t0$mu <- with(t0, Var1 - 156)
+t0$mu_squared <-with(t0, mu^2)
+t0$x_to_musq <- with(t0, mu_squared*Freq)
+head(t0)
+```
+
+
+## 2nd Iteration
+
+```{r}
+xmin=-215840
+xmax=256930
+ymin= 80496.98
+ymax=364306
+
+
+y<- list()
+plot(og)
+i <- 1
+while (i<101) {
+
+  randomX<-runif(1,xmin,xmax)
+  randomY<-runif(1,ymin,ymax)
+  
+if(randomX+40000<xmax && randomY+28000 < ymax) {#need to fix the condition here 
+  
+  rect(randomX, randomY, randomX+40000, randomY+28000, border="red")
+
+  w<-owin(c(randomX,randomX+40000),c(randomY, randomY+28000))
+  
+  #ok<-inside.owin(randomX, randomY, w)
+  ok<-inside.owin(og$x, og$y, w)
+ 
+  m <-  length(which(ok, arr.ind = TRUE))
+  y[[paste0("val1", i)]] <- m
+    
+i=i+1
+}
+}
+```
+
+### Table of attributes for the second iteration
+
+```{r}
+df1 <- ldply (y, data.frame)
+setnames(df1, old=c(".id","X..i.."), 
+         new=c("id", "num"))
+w1 = table(df1$num)
+class(w1)
+t1 = as.data.frame(w1)
+t1$Var1 <-as.numeric(as.character(t1$Var1))
+t1$mu <- with(t1, Var1 - 156)
+t1$mu_squared <-with(t1, mu^2)
+t1$x_to_musq <- with(t1, mu_squared*Freq)
+head(t1)
+```
+
+
+## 3rd Iteration
+
+```{r}
+xmin=-215840
+xmax=256930
+ymin= 80496.98
+ymax=364306
+#totalnumber=100
+z<- list()
+plot(og)
+i <- 1
+while (i<101) {
+
+  randomX<-runif(1,xmin,xmax)
+  randomY<-runif(1,ymin,ymax)
+  
+if(randomX+40000<xmax && randomY+28000 < ymax) {#need to fix the condition here 
+  
+  rect(randomX, randomY, randomX+40000, randomY+28000, border="red")
+  w<-owin(c(randomX,randomX+40000),c(randomY, randomY+28000))
+  #ok<-inside.owin(randomX, randomY, w)
+  ok<-inside.owin(og$x, og$y, w)
+  m <-  length(which(ok, arr.ind = TRUE))
+  z[[paste0("val1", i)]] <- m
+    
+i=i+1
+}
+}
+```
+### Table of attributes for the third iteration
+IN ORDER TO NOT TAKE so much space with  the table of attributes I have put just the head of the data frame. If you run it in your machine without the head function it would give you full table of attributes
+
+```{r}
+df2 <- ldply (z, data.frame)
+setnames(df2, old=c(".id","X..i.."), 
+         new=c("id", "num"))
+w2 = table(df2$num)
+class(w2)
+t2 = as.data.frame(w2)
+t2$Var1 <-as.numeric(as.character(t2$Var1))
+t2$mu <- with(t2, Var1 - 156)
+t2$mu_squared <-with(t2, mu^2)
+t2$x_to_musq <- with(t2, mu_squared*Freq)
+head(t2)
+```
+
+
+# Summary of Variance
+This section I am checking the variance of each method and then compare them. 
+
+## VMR for Regular Count Method  
+
+```{r}
+#calculating the variance for regular quadrant method
+vari = sum(new_df$`X(K-mu)^2`)/99
+vmr = vari/156
+vmr
+```
+## VMR for Random Count Method
+
+```{r}
+#calculating the variance for regular quadrant method
+vari0 = sum(t0$x_to_musq)/99
+vmr0 = vari0/156
+vari1 = sum(t1$x_to_musq)/99
+vmr1 = vari1/156
+vari2 = sum(t2$x_to_musq)/99
+vmr2 = vari2/156
+vmr_reg = (vmr0+vmr1+vmr2)/3
+vmr_reg
+```
+
+As the result, the numbers are close enough to each other. I run the random quadrat count three times. If I run random quadrat count 1000 times VMR of Random Count Method might have the value close to the regular one. Another thing is that if we run the VMR for Random Count Method we will get the different value. 
